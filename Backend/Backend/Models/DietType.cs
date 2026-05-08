@@ -1,6 +1,9 @@
 ﻿namespace Backend.Models
 {
-    public class DietType
+    public enum DietType
     {
+        None,
+        Vegetarian,
+        Vegan
     }
 }
