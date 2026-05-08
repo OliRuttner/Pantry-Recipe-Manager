@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  background: #f7f1e7;
+}
+
+.k-shadow {
+  box-shadow: 0 24px 80px -35px rgba(88, 60, 35, 0.24);
+}
+
+.floaty {
+  animation: floaty 6s ease-in-out infinite;
+}
+
+.fade-up {
+  animation: fadeUp 0.55s ease both;
+}
+
+.soft-pop {
+  animation: softPop 0.3s ease both;
+}
+
+@keyframes floaty {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes softPop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (pointer: fine) {
+
+  html,
+  body,
+  #root {
+    cursor: url("/cursor-whisk.png") 4 4, auto;
+  }
+
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  label,
+  summary,
+  [role="button"],
+  [data-clickable="true"] {
+    cursor: url("/cursor-mitten.png") 8 8, pointer !important;
+  }
+}
