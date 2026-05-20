@@ -6,6 +6,11 @@ using System.Text.RegularExpressions;
 
 namespace Backend.Controllers
 {
+    public class CookRecipeDto
+    {
+        public int Portions { get; set; } = 1;
+    }
+
     [Route("api/[controller]")]
     [ApiController]
     public class RecipesController : ControllerBase
@@ -17,37 +22,39 @@ namespace Backend.Controllers
             _context = context;
         }
 
-        // 1. READ ALL (Including Ingredients)
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Recipe>>> GetRecipes()
         {
-            // We use .Include to tell EF to fetch the linked ingredients from the junction table
-            var recipes = await _context.Recipes
+            return await _context.Recipes
                 .Include(r => r.Ingredients)
-                    .ThenInclude(ri => ri.Item) // <-- This is the magic line
+                    .ThenInclude(ri => ri.Item)
                 .ToListAsync();
-
-            return recipes;
         }
 
-        // 2. READ by name
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Recipe>> GetRecipeById(int id)
+        {
+            var recipe = await _context.Recipes
+                .Include(r => r.Ingredients)
+                    .ThenInclude(ri => ri.Item)
+                .FirstOrDefaultAsync(r => r.Id == id);
+
+            if (recipe == null) return NotFound();
+
+            return recipe;
+        }
+
         [HttpGet("search/{searchTerm}")]
         public async Task<ActionResult<IEnumerable<Recipe>>> SearchRecipes(string searchTerm)
         {
-            // 1. Define the Regex pattern to find all punctuation
-            // \p{P} matches any punctuation character
             string punctuationPattern = @"\p{P}";
-
-            // 2. Clean the Search Term: Remove punctuation and make it lowercase
             string cleanedSearch = Regex.Replace(searchTerm, punctuationPattern, "").ToLower().Trim();
 
-            // 3. Fetch recipes from the DB
-            // Note: We fetch the list first because SQL can't do the Regex part
             var allRecipes = await _context.Recipes
                 .Include(r => r.Ingredients)
+                    .ThenInclude(ri => ri.Item)
                 .ToListAsync();
 
-            // 4. Filter the list in memory using the same Regex logic
             var results = allRecipes.Where(r =>
                 Regex.Replace(r.Name, punctuationPattern, "").ToLower().Contains(cleanedSearch)
             ).ToList();
@@ -68,7 +75,7 @@ namespace Backend.Controllers
                     .ThenInclude(ri => ri.Item)
                 .ToListAsync();
 
-            var results = allRecipes.Where(r => r.Ingredients.Any(ri => 
+            var results = allRecipes.Where(r => r.Ingredients.Any(ri =>
                 ri.Item != null && Regex.Replace(ri.Item.Name, punctuationPattern, "").ToLower().Contains(cleanedSearch)
             )).ToList();
 
@@ -80,77 +87,140 @@ namespace Backend.Controllers
         [HttpGet("recommend")]
         public async Task<ActionResult<IEnumerable<object>>> RecommendRecipes()
         {
-            // Fetch inventory items with >0 quantity
             var inventory = await _context.Items.Where(i => i.Quantity > 0).ToListAsync();
 
             var allRecipes = await _context.Recipes
                 .Include(r => r.Ingredients)
+                    .ThenInclude(ri => ri.Item)
                 .ToListAsync();
 
             var recommendations = new List<object>();
 
-            foreach(var recipe in allRecipes)
+            foreach (var recipe in allRecipes)
             {
                 int maxPortions = recipe.CalculateMaxPortions(inventory);
+
                 if (maxPortions > 0)
                 {
                     recommendations.Add(new { Recipe = recipe, MaxPortions = maxPortions });
                 }
             }
 
-            // Order by max portions descending to recommend the ones we can make the most of
-            recommendations = recommendations.OrderByDescending(r => (int)((dynamic)r).MaxPortions).ToList();
+            recommendations = recommendations
+                .OrderByDescending(r => (int)((dynamic)r).MaxPortions)
+                .ToList();
 
             if (!recommendations.Any()) return NotFound("No recipes can be made with current inventory.");
 
             return Ok(recommendations);
         }
 
-        // 3. CREATE
         [HttpPost]
         public async Task<ActionResult<Recipe>> PostRecipe(Recipe recipe)
         {
+            foreach (var ingredient in recipe.Ingredients)
+            {
+                ingredient.Recipe = null;
+                ingredient.Item = null;
+            }
+
             _context.Recipes.Add(recipe);
             await _context.SaveChangesAsync();
 
-            // Now we point to the method that actually takes an ID
-            return CreatedAtAction(nameof(GetRecipeById), new { id = recipe.Id }, recipe);
+            var savedRecipe = await _context.Recipes
+                .Include(r => r.Ingredients)
+                    .ThenInclude(ri => ri.Item)
+                .FirstAsync(r => r.Id == recipe.Id);
+
+            return CreatedAtAction(nameof(GetRecipeById), new { id = recipe.Id }, savedRecipe);
         }
 
-        // 4. UPDATE
         [HttpPut("{id}")]
         public async Task<IActionResult> PutRecipe(int id, Recipe recipe)
         {
             if (id != recipe.Id) return BadRequest();
 
-            _context.Entry(recipe).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!_context.Recipes.Any(e => e.Id == id)) return NotFound();
-                else throw;
-            }
-
-            return NoContent();
-        }
-        // This provides a direct path to one recipe: api/Recipes/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Recipe>> GetRecipeById(int id)
-        {
-            var recipe = await _context.Recipes
+            var existingRecipe = await _context.Recipes
                 .Include(r => r.Ingredients)
                 .FirstOrDefaultAsync(r => r.Id == id);
 
-            if (recipe == null) return NotFound();
+            if (existingRecipe == null) return NotFound();
 
-            return recipe;
+            existingRecipe.Name = recipe.Name;
+            existingRecipe.CaloriesPerPortion = recipe.CaloriesPerPortion;
+            existingRecipe.BasePortions = recipe.BasePortions;
+            existingRecipe.Diet = recipe.Diet;
+            existingRecipe.Allergens = recipe.Allergens;
+            existingRecipe.Instructions = recipe.Instructions;
+
+            _context.RecipeIngredients.RemoveRange(existingRecipe.Ingredients);
+
+            existingRecipe.Ingredients = recipe.Ingredients.Select(ingredient => new RecipeIngredient
+            {
+                RecipeId = id,
+                ItemId = ingredient.ItemId,
+                RequiredQuantity = ingredient.RequiredQuantity
+            }).ToList();
+
+            await _context.SaveChangesAsync();
+
+            return NoContent();
         }
 
-        // 5. DELETE
+        [HttpPost("{id}/cook")]
+        public async Task<IActionResult> CookRecipe(int id, [FromBody] CookRecipeDto request)
+        {
+            if (request.Portions <= 0) return BadRequest("Portions must be greater than 0.");
+
+            var recipe = await _context.Recipes
+                .Include(r => r.Ingredients)
+                    .ThenInclude(ri => ri.Item)
+                .FirstOrDefaultAsync(r => r.Id == id);
+
+            if (recipe == null) return NotFound("Recipe not found.");
+
+            double multiplier = (double)request.Portions / recipe.BasePortions;
+            var missingIngredients = new List<object>();
+
+            foreach (var ingredient in recipe.Ingredients)
+            {
+                if (ingredient.Item == null) continue;
+
+                double neededQuantity = ingredient.RequiredQuantity * multiplier;
+
+                if (ingredient.Item.Quantity < neededQuantity)
+                {
+                    missingIngredients.Add(new
+                    {
+                        ingredientName = ingredient.Item.Name,
+                        quantityNeeded = Math.Round(neededQuantity - ingredient.Item.Quantity, 2),
+                        unit = ingredient.Item.Unit
+                    });
+                }
+            }
+
+            if (missingIngredients.Any())
+            {
+                return BadRequest(new
+                {
+                    message = "Not enough ingredients to cook this recipe.",
+                    missingIngredients
+                });
+            }
+
+            foreach (var ingredient in recipe.Ingredients)
+            {
+                if (ingredient.Item == null) continue;
+
+                double neededQuantity = ingredient.RequiredQuantity * multiplier;
+                ingredient.Item.Quantity = Math.Round(ingredient.Item.Quantity - neededQuantity, 2);
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Recipe cooked successfully." });
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteRecipe(int id)
         {

@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
-import ResponsiveTable from "../components/ResponsiveTable.jsx";
+import { useEffect, useMemo, useState } from "react";
 import {
-    canCookRecipe,
     getMissingIngredients,
+    getRecipeCoverage,
 } from "../utils/pantryLogic.js";
 
 export default function SuggestionsPage({
@@ -13,102 +12,200 @@ export default function SuggestionsPage({
     onCookRecipe,
     onAddMissingToShopping,
 }) {
-    const [selectedId, setSelectedId] = useState(recipes[0]?.id ?? null);
+    const [selectedId, setSelectedId] = useState(null);
+
+    useEffect(() => {
+        if (!selectedId && recipes.length > 0) {
+            setSelectedId(recipes[0].id);
+        }
+    }, [recipes, selectedId]);
 
     const suggestions = useMemo(() => {
-        return recipes.map((recipe) => {
-            const missing = getMissingIngredients(recipe, pantry, recipe.basePortions);
-
-            return {
-                ...recipe,
-                missing,
-                canCook: canCookRecipe(recipe, pantry, recipe.basePortions),
-            };
-        });
+        return recipes
+            .map((recipe) => ({
+                recipe,
+                coverage: getRecipeCoverage(recipe, pantry),
+                missing: getMissingIngredients(recipe, pantry),
+            }))
+            .sort((a, b) => b.coverage - a.coverage);
     }, [recipes, pantry]);
 
-    const selectedSuggestion = suggestions.find((item) => item.id === selectedId);
+    const selectedSuggestion =
+        suggestions.find(
+            (suggestion) => suggestion.recipe.id === selectedId
+        ) ?? suggestions[0];
 
-    const columns = [
-        { key: "name", label: "Recipe" },
-        {
-            key: "missing",
-            label: "Missing Ingredients",
-            render: (recipe) =>
-                recipe.missing.length === 0 ? (
-                    <span className="pill olive">None</span>
-                ) : (
-                    <div className="status-list">
-                        {recipe.missing.map((item) => (
-                            <span className="pill warning" key={item.ingredientName}>
-                                {item.ingredientName}: {item.quantityNeeded} {item.unit}
-                            </span>
-                        ))}
-                    </div>
-                ),
-        },
-        {
-            key: "canCook",
-            label: "Can Cook?",
-            render: (recipe) =>
-                recipe.canCook ? (
-                    <span className="pill olive">Yes</span>
-                ) : (
-                    <span className="pill danger">No</span>
-                ),
-        },
-    ];
-
-    function openRecipe(recipe) {
-        setSelectedRecipeId(recipe.id);
+    function openRecipe(recipeId) {
+        setSelectedRecipeId(recipeId);
         setPage("recipeDetail");
+    }
+
+    async function handleCook() {
+        if (!selectedSuggestion) return;
+
+        await onCookRecipe(selectedSuggestion.recipe.id, 1);
+    }
+
+    async function handleAddMissing() {
+        if (!selectedSuggestion || selectedSuggestion.missing.length === 0)
+            return;
+
+        await onAddMissingToShopping(
+            selectedSuggestion.missing.map((item) => ({
+                ingredientName: item.name,
+                quantityNeeded: item.quantity,
+                unit: item.unit,
+            }))
+        );
     }
 
     return (
         <section className="page-card">
-            <div className="page-title-row">
+            <div className="section-heading">
                 <div>
-                    <p className="eyebrow">Suggestion hub</p>
-                    <h1>Suggestions</h1>
-                    <p className="muted">
-                        Recipes are checked against your current inventory.
-                    </p>
+                    <p className="eyebrow">Recommendations</p>
+                    <h1>What can you cook today?</h1>
                 </div>
             </div>
 
-            <ResponsiveTable
-                columns={columns}
-                rows={suggestions}
-                selectedId={selectedId}
-                onRowClick={(recipe) => setSelectedId(recipe.id)}
-            />
+            <div className="suggestions-layout">
+                <aside className="suggestions-sidebar">
+                    {suggestions.map((suggestion) => (
+                        <button
+                            key={suggestion.recipe.id}
+                            type="button"
+                            className={`suggestion-card ${
+                                selectedSuggestion?.recipe.id ===
+                                suggestion.recipe.id
+                                    ? "active"
+                                    : ""
+                            }`}
+                            onClick={() =>
+                                setSelectedId(suggestion.recipe.id)
+                            }
+                        >
+                            <div>
+                                <h3>{suggestion.recipe.name}</h3>
+                                <p>
+                                    {Math.round(suggestion.coverage)}% pantry
+                                    match
+                                </p>
+                            </div>
 
-            <div className="action-bar">
-                <button
-                    className="primary-button"
-                    disabled={!selectedSuggestion}
-                    onClick={() => openRecipe(selectedSuggestion)}
-                >
-                    View Recipe
-                </button>
+                            <span
+                                className={`status-pill ${
+                                    suggestion.coverage === 100
+                                        ? "status-good"
+                                        : "status-warning"
+                                }`}
+                            >
+                                {suggestion.coverage === 100
+                                    ? "Ready"
+                                    : `${suggestion.missing.length} missing`}
+                            </span>
+                        </button>
+                    ))}
+                </aside>
 
-                <button
-                    className="secondary-button"
-                    disabled={!selectedSuggestion || !selectedSuggestion.canCook}
-                    onClick={() =>
-                        onCookRecipe(selectedSuggestion.id, selectedSuggestion.basePortions)
-                    }
-                >
-                    Cook Selected
-                </button>
+                {selectedSuggestion && (
+                    <article className="recipe-preview">
+                        <div className="preview-header">
+                            <div>
+                                <p className="eyebrow">
+                                    Suggested Recipe
+                                </p>
+                                <h2>{selectedSuggestion.recipe.name}</h2>
+                            </div>
 
-                <button
-                    className="secondary-button"
-                    disabled={!selectedSuggestion || selectedSuggestion.missing.length === 0}
-                    onClick={() => onAddMissingToShopping(selectedSuggestion.missing)}
-                >
-                    Add Missing to Shopping List
-                </button>
+                            <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() =>
+                                    openRecipe(
+                                        selectedSuggestion.recipe.id
+                                    )
+                                }
+                            >
+                                Open Recipe
+                            </button>
+                        </div>
+
+                        <div className="preview-grid">
+                            <div className="metric-card">
+                                <span>Coverage</span>
+                                <strong>
+                                    {Math.round(
+                                        selectedSuggestion.coverage
+                                    )}
+                                    %
+                                </strong>
+                            </div>
+
+                            <div className="metric-card">
+                                <span>Calories</span>
+                                <strong>
+                                    {
+                                        selectedSuggestion.recipe
+                                            .caloriesPerPortion
+                                    }
+                                </strong>
+                            </div>
+
+                            <div className="metric-card">
+                                <span>Base Portions</span>
+                                <strong>
+                                    {
+                                        selectedSuggestion.recipe
+                                            .basePortions
+                                    }
+                                </strong>
+                            </div>
+                        </div>
+
+                        <div className="preview-section">
+                            <h3>Missing Ingredients</h3>
+
+                            {selectedSuggestion.missing.length === 0 ? (
+                                <p className="muted-text">
+                                    You have everything you need.
+                                </p>
+                            ) : (
+                                <ul className="missing-list">
+                                    {selectedSuggestion.missing.map(
+                                        (item) => (
+                                            <li key={item.name}>
+                                                {item.name} —{" "}
+                                                {item.quantity}{" "}
+                                                {item.unit}
+                                            </li>
+                                        )
+                                    )}
+                                </ul>
+                            )}
+                        </div>
+
+                        <div className="modal-actions">
+                            <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={handleAddMissing}
+                                disabled={
+                                    selectedSuggestion.missing.length === 0
+                                }
+                            >
+                                Add Missing to Shopping List
+                            </button>
+
+                            <button
+                                type="button"
+                                className="primary-button"
+                                onClick={handleCook}
+                            >
+                                Cook Recipe
+                            </button>
+                        </div>
+                    </article>
+                )}
             </div>
         </section>
     );

@@ -5,7 +5,7 @@ export default function ResponsiveTable({
     onRowClick,
     emptyText = "No data found.",
 }) {
-    if (rows.length === 0) {
+    if (!rows || rows.length === 0) {
         return <div className="empty-box">{emptyText}</div>;
     }
 

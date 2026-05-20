@@ -77,7 +77,7 @@ export default function RecipeDetailPage({ recipe, pantry, setPage, onCookRecipe
             <h2>Instructions</h2>
 
             <div className="instructions-box">
-                {recipe.instructions.split(".").map((step, index) => {
+                {(recipe.instructions ?? "").split(".").map((step, index) => {
                     const text = step.trim();
                     if (!text) return null;
 
