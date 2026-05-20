@@ -5,126 +5,213 @@ import RecipesPage from "./pages/RecipesPage.jsx";
 import SuggestionsPage from "./pages/SuggestionsPage.jsx";
 import ShoppingListPage from "./pages/ShoppingListPage.jsx";
 import RecipeDetailPage from "./pages/RecipeDetailPage.jsx";
-import { pantrySeed, recipeSeed, shoppingSeed } from "./data/mockData.js";
-import {
-  deductInventory,
-  getMissingIngredients,
-  mergeShoppingItems,
-} from "./utils/pantryLogic.js";
-
-function useLocalStorage(key, initialValue) {
-  const [value, setValue] = useState(() => {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : initialValue;
-  });
-
-  useEffect(() => {
-    localStorage.setItem(key, JSON.stringify(value));
-  }, [key, value]);
-
-  return [value, setValue];
-}
+import { api } from "./services/api.js";
+import { getMissingIngredients } from "./utils/pantryLogic.js";
 
 export default function App() {
   const [page, setPage] = useState("pantry");
-  const [pantry, setPantry] = useLocalStorage("pantry", pantrySeed);
-  const [recipes, setRecipes] = useLocalStorage("recipes", recipeSeed);
-  const [shoppingList, setShoppingList] = useLocalStorage(
-    "shoppingList",
-    shoppingSeed
-  );
+  const [pantry, setPantry] = useState([]);
+  const [recipes, setRecipes] = useState([]);
+  const [shoppingList, setShoppingList] = useState([]);
+  const [selectedItemId, setSelectedItemId] = useState(null);
+  const [selectedRecipeId, setSelectedRecipeId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [selectedItemId, setSelectedItemId] = useState(pantrySeed[0].id);
-  const [selectedRecipeId, setSelectedRecipeId] = useState(recipeSeed[0].id);
+  async function loadAllData() {
+    setError("");
+
+    try {
+      const [inventoryData, recipeData, shoppingData] = await Promise.all([
+        api.getInventory(),
+        api.getRecipes(),
+        api.getShoppingList(),
+      ]);
+
+      setPantry(inventoryData);
+      setRecipes(recipeData);
+      setShoppingList(shoppingData);
+
+      setSelectedItemId((currentId) =>
+        currentId && inventoryData.some((item) => item.id === currentId)
+          ? currentId
+          : inventoryData[0]?.id ?? null
+      );
+
+      setSelectedRecipeId((currentId) =>
+        currentId && recipeData.some((recipe) => recipe.id === currentId)
+          ? currentId
+          : recipeData[0]?.id ?? null
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadPantry() {
+    const inventoryData = await api.getInventory();
+    setPantry(inventoryData);
+  }
+
+  async function loadRecipes() {
+    const recipeData = await api.getRecipes();
+    setRecipes(recipeData);
+  }
+
+  async function loadShoppingList() {
+    const shoppingData = await api.getShoppingList();
+    setShoppingList(shoppingData);
+  }
+
+  useEffect(() => {
+    loadAllData();
+  }, []);
 
   const selectedRecipe =
     recipes.find((recipe) => recipe.id === selectedRecipeId) || recipes[0];
 
-  function saveItem(item) {
-    setPantry((current) => {
-      const exists = current.some((oldItem) => oldItem.id === item.id);
+  async function saveItem(item) {
+    setError("");
 
-      if (exists) {
-        return current.map((oldItem) =>
-          oldItem.id === item.id ? item : oldItem
-        );
+    try {
+      if (item.id) {
+        await api.updateInventoryItem(item);
+        await loadPantry();
+        setSelectedItemId(item.id);
+      } else {
+        const createdItem = await api.createInventoryItem(item);
+        await loadPantry();
+        setSelectedItemId(createdItem.id);
       }
-
-      return [...current, item];
-    });
-
-    setSelectedItemId(item.id);
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
-  function deleteItem(id) {
+  async function deleteItem(id) {
     if (!id) return;
+    setError("");
 
-    setPantry((current) => current.filter((item) => item.id !== id));
-    setSelectedItemId(null);
+    try {
+      await api.deleteInventoryItem(id);
+      await loadPantry();
+      setSelectedItemId(null);
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
-  function saveRecipe(recipe) {
-    setRecipes((current) => {
-      const exists = current.some((oldRecipe) => oldRecipe.id === recipe.id);
+  async function saveRecipe(recipe) {
+    setError("");
 
-      if (exists) {
-        return current.map((oldRecipe) =>
-          oldRecipe.id === recipe.id ? recipe : oldRecipe
-        );
+    try {
+      if (recipe.id) {
+        await api.updateRecipe(recipe, pantry);
+        await loadRecipes();
+        setSelectedRecipeId(recipe.id);
+      } else {
+        const createdRecipe = await api.createRecipe(recipe, pantry);
+        await loadAllData();
+        setSelectedRecipeId(createdRecipe.id);
       }
-
-      return [...current, recipe];
-    });
-
-    setSelectedRecipeId(recipe.id);
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
-  function deleteRecipe(id) {
+  async function deleteRecipe(id) {
     if (!id) return;
+    setError("");
 
-    setRecipes((current) => current.filter((recipe) => recipe.id !== id));
-    setSelectedRecipeId(null);
+    try {
+      await api.deleteRecipe(id);
+      await loadRecipes();
+      setSelectedRecipeId(null);
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
-  function addMissingToShopping(missingItems) {
-    setShoppingList((current) => mergeShoppingItems(current, missingItems));
-    setPage("shopping");
+  async function addMissingToShopping(missingItems) {
+    setError("");
+
+    try {
+      await Promise.all(missingItems.map((item) => api.addShoppingItem(item)));
+      await loadShoppingList();
+      setPage("shopping");
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
-  function cookRecipe(recipeId, portions) {
+  async function cookRecipe(recipeId, portions) {
     const recipe = recipes.find((item) => item.id === recipeId);
     if (!recipe) return;
 
     const missing = getMissingIngredients(recipe, pantry, portions);
 
     if (missing.length > 0) {
-      addMissingToShopping(missing);
+      await addMissingToShopping(missing);
       return;
     }
 
-    setPantry((current) => deductInventory(current, recipe, portions));
-    setPage("pantry");
+    setError("");
+
+    try {
+      await api.cookRecipe(recipeId, portions);
+      await loadPantry();
+      setPage("pantry");
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
-  function toggleBought(id) {
-    setShoppingList((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, isBought: !item.isBought } : item
-      )
-    );
+  async function toggleBought(id) {
+    setError("");
+
+    try {
+      await api.toggleShoppingItem(id);
+      await loadShoppingList();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
-  function clearBought() {
-    setShoppingList((current) => current.filter((item) => !item.isBought));
+  async function clearBought() {
+    setError("");
+
+    try {
+      await api.clearBoughtShoppingItems();
+      await loadShoppingList();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
-  function clearAllShopping() {
-    setShoppingList([]);
+  async function clearAllShopping() {
+    setError("");
+
+    try {
+      await Promise.all(shoppingList.map((item) => api.deleteShoppingItem(item.id)));
+      await loadShoppingList();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   return (
     <Layout page={page} setPage={setPage}>
-      {page === "pantry" && (
+      {loading && (
+        <section className="page-card">
+          <h1>Loading pantry data...</h1>
+        </section>
+      )}
+
+      {!loading && error && <div className="empty-box">API error: {error}</div>}
+
+      {!loading && page === "pantry" && (
         <PantryPage
           pantry={pantry}
           selectedItemId={selectedItemId}
@@ -134,7 +221,7 @@ export default function App() {
         />
       )}
 
-      {page === "recipes" && (
+      {!loading && page === "recipes" && (
         <RecipesPage
           recipes={recipes}
           pantry={pantry}
@@ -146,7 +233,7 @@ export default function App() {
         />
       )}
 
-      {page === "recipeDetail" && selectedRecipe && (
+      {!loading && page === "recipeDetail" && selectedRecipe && (
         <RecipeDetailPage
           recipe={selectedRecipe}
           pantry={pantry}
@@ -155,7 +242,7 @@ export default function App() {
         />
       )}
 
-      {page === "suggestions" && (
+      {!loading && page === "suggestions" && (
         <SuggestionsPage
           recipes={recipes}
           pantry={pantry}
@@ -166,7 +253,7 @@ export default function App() {
         />
       )}
 
-      {page === "shopping" && (
+      {!loading && page === "shopping" && (
         <ShoppingListPage
           shoppingList={shoppingList}
           onToggleBought={toggleBought}

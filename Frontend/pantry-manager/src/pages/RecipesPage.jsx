@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import Modal from "../components/Modal.jsx";
 import ResponsiveTable from "../components/ResponsiveTable.jsx";
-import { diets, units } from "../data/mockData.js";
+import { diets, units } from "../data/constants.js";
 
 const emptyRecipe = {
     name: "",
@@ -62,7 +62,10 @@ export default function RecipesPage({
 
     function openEdit() {
         if (!selectedRecipe) return;
-        setForm(selectedRecipe);
+        setForm({
+            ...selectedRecipe,
+            ingredients: selectedRecipe.ingredients ?? [],
+        });
         setIngredientForm(emptyIngredient);
         setModalMode("edit");
     }
@@ -70,15 +73,20 @@ export default function RecipesPage({
     function addIngredient() {
         if (!ingredientForm.name || !ingredientForm.quantity) return;
 
+        const pantryItem = pantry.find(
+            (item) => item.name.trim().toLowerCase() === ingredientForm.name.trim().toLowerCase()
+        );
+
         setForm({
             ...form,
             ingredients: [
                 ...form.ingredients,
                 {
-                    id: Date.now(),
+                    id: pantryItem?.id ?? Date.now(),
+                    itemId: pantryItem?.id,
                     name: ingredientForm.name,
                     quantity: Number(ingredientForm.quantity),
-                    unit: ingredientForm.unit,
+                    unit: pantryItem?.unit ?? ingredientForm.unit,
                 },
             ],
         });
@@ -94,17 +102,16 @@ export default function RecipesPage({
     }
 
     function saveRecipe(event) {
-        event.preventDefault();
+    event.preventDefault();
 
-        onSaveRecipe({
-            ...form,
-            id: form.id ?? Date.now(),
-            caloriesPerPortion: Number(form.caloriesPerPortion),
-            basePortions: Number(form.basePortions),
-        });
+    onSaveRecipe({
+        ...form,
+        caloriesPerPortion: Number(form.caloriesPerPortion),
+        basePortions: Number(form.basePortions),
+    });
 
-        setModalMode(null);
-    }
+    setModalMode(null);
+}
 
     const columns = [
         { key: "name", label: "Recipe" },

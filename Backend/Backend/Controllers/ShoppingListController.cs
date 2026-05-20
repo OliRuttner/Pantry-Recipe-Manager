@@ -5,13 +5,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace PantryManager.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
     public class CheckoutItemDto
     {
         public int ShoppingListItemId { get; set; }
         public double ActualQuantityBought { get; set; }
     }
+    [Route("api/[controller]")]
+    [ApiController]
+
     public class ShoppingListController : ControllerBase
     {
         private readonly AppDbContext _context;

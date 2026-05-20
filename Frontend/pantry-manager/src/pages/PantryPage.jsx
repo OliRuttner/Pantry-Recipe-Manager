@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import Modal from "../components/Modal.jsx";
 import ResponsiveTable from "../components/ResponsiveTable.jsx";
-import { categories, units } from "../data/mockData.js";
+import { categories, units } from "../data/constants.js";
 import { isExpiringSoon, isLowStock } from "../utils/pantryLogic.js";
 
 const emptyItem = {
@@ -49,23 +49,25 @@ export default function PantryPage({
     }
 
     function openEdit() {
-        if (!selectedItem) return;
-        setForm(selectedItem);
-        setModalMode("edit");
-    }
+    if (!selectedItem) return;
+    setForm({
+        ...selectedItem,
+        expirationDate: selectedItem.expirationDate ? selectedItem.expirationDate.slice(0, 10) : "",
+    });
+    setModalMode("edit");
+}
 
     function saveItem(event) {
-        event.preventDefault();
+    event.preventDefault();
 
-        onSaveItem({
-            ...form,
-            id: form.id ?? Date.now(),
-            quantity: Number(form.quantity),
-            lowStockThreshold: Number(form.lowStockThreshold),
-        });
+    onSaveItem({
+        ...form,
+        quantity: Number(form.quantity),
+        lowStockThreshold: Number(form.lowStockThreshold),
+    });
 
-        setModalMode(null);
-    }
+    setModalMode(null);
+}
 
     const columns = [
         { key: "name", label: "Product" },
@@ -74,7 +76,7 @@ export default function PantryPage({
         {
             key: "expirationDate",
             label: "Exp. Date",
-            render: (item) => item.expirationDate || "—",
+            render: (item) => item.expirationDate ? item.expirationDate.slice(0, 10) : "—",
         },
         {
             key: "status",
