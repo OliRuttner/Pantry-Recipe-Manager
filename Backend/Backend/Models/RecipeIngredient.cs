@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization; // Add this!
+﻿using System.Text.Json.Serialization;
 
 namespace Backend.Models
 {
@@ -6,7 +6,7 @@ namespace Backend.Models
     {
         public int RecipeId { get; set; }
 
-        [JsonIgnore] // This stops the infinite loop!
+        [JsonIgnore]
         public Recipe? Recipe { get; set; }
 
         public int ItemId { get; set; }

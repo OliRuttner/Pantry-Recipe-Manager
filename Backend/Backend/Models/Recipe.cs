@@ -15,8 +15,28 @@
 
         public int CalculateMaxPortions(List<Item> inventory)
         {
-            // Logic to be implemented based on available inventory
-            return 0;
+            if (Ingredients == null || !Ingredients.Any()) return 0;
+
+            int maxPortions = int.MaxValue;
+
+            foreach (var ingredient in Ingredients)
+            {
+                var inventoryItem = inventory.FirstOrDefault(i => i.Id == ingredient.ItemId);
+                if (inventoryItem == null || inventoryItem.Quantity == 0)
+                {
+                    return 0; // Missing ingredient
+                }
+
+                // Calculate how many base portions we can make with this ingredient
+                int portionsWithThisIngredient = (int)(inventoryItem.Quantity / ingredient.RequiredQuantity) * BasePortions;
+
+                if (portionsWithThisIngredient < maxPortions)
+                {
+                    maxPortions = portionsWithThisIngredient;
+                }
+            }
+
+            return maxPortions == int.MaxValue ? 0 : maxPortions;
         }
     }
 }

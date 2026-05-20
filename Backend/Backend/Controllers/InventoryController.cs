@@ -38,8 +38,7 @@ namespace Backend.Controllers
         [HttpPost]
         public async Task<ActionResult<Item>> PostItem(Item item)
         {
-            // EF is smart: if you send an ExpirationDate, 
-            // it will treat it as a PerishableItem automatically.
+            // EF is smart: if you send an ExpirationDate, it will treat it as a PerishableItem automatically.
             _context.Items.Add(item);
             await _context.SaveChangesAsync();
 
