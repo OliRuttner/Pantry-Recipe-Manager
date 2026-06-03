@@ -104,6 +104,21 @@ namespace Backend.Controllers
             }
         }
 
+
+        [HttpPost("checkout-bought")]
+        public async Task<IActionResult> CheckoutBoughtItems()
+        {
+            try
+            {
+                var result = await _service.CheckoutBoughtItemsAsync();
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         [HttpPost("bulk-checkout")]
         public async Task<IActionResult> BulkCheckoutItems([FromBody] List<CheckoutItemDto> request)
         {

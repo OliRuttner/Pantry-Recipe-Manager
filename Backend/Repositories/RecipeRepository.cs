@@ -16,6 +16,7 @@ public class RecipeRepository : IRecipeRepository
     public async Task<List<Recipe>> GetAllAsync()
     {
         return await _context.Recipes
+            .AsNoTracking()
             .Include(r => r.Ingredients)
                 .ThenInclude(ri => ri.Item)
             .ToListAsync();

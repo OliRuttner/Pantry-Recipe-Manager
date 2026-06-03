@@ -15,7 +15,7 @@ public class InventoryRepository : IInventoryRepository
 
     public async Task<List<Item>> GetAllAsync()
     {
-        return await _context.Items.ToListAsync();
+        return await _context.Items.AsNoTracking().ToListAsync();
     }
 
     public async Task<Item?> GetByIdAsync(int id)

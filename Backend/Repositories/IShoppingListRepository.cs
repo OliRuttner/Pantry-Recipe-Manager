@@ -12,6 +12,7 @@ public interface IShoppingListRepository
     Task<Item?> GetPantryItemByIdAsync(int id);
     Task<Item?> GetPantryItemByNameAsync(string name);
     Task AddAsync(ShoppingListItem item);
+    Task AddPantryItemAsync(Item item);
     void Delete(ShoppingListItem item);
     void DeleteRange(IEnumerable<ShoppingListItem> items);
     Task SaveAsync();

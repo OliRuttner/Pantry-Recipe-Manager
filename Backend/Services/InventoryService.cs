@@ -27,8 +27,18 @@ public class InventoryService : IInventoryService
         if (string.IsNullOrWhiteSpace(item.Name))
             throw new ArgumentException("Item name cannot be empty.");
 
+        item.Name = item.Name.Trim();
+
         if (item.Quantity < 0)
             throw new ArgumentException("Quantity cannot be negative.");
+
+        var existingItems = await _repository.GetAllAsync();
+        bool duplicateExists = existingItems.Any(existing =>
+            existing.Name.Trim().Equals(item.Name, StringComparison.OrdinalIgnoreCase)
+        );
+
+        if (duplicateExists)
+            throw new ArgumentException("This ingredient already exists in the pantry.");
 
         await _repository.AddAsync(item);
         await _repository.SaveAsync();
@@ -44,8 +54,19 @@ public class InventoryService : IInventoryService
     if (string.IsNullOrWhiteSpace(item.Name))
         throw new ArgumentException("Item name cannot be empty.");
 
+    item.Name = item.Name.Trim();
+
     if (item.Quantity < 0)
         throw new ArgumentException("Quantity cannot be negative.");
+
+    var existingItems = await _repository.GetAllAsync();
+    bool duplicateExists = existingItems.Any(existing =>
+        existing.Id != id &&
+        existing.Name.Trim().Equals(item.Name, StringComparison.OrdinalIgnoreCase)
+    );
+
+    if (duplicateExists)
+        throw new ArgumentException("This ingredient already exists in the pantry.");
 
     _repository.Update(item);
     await _repository.SaveAsync();

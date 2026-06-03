@@ -14,4 +14,5 @@ public interface IShoppingListService
     Task ClearBoughtItemsAsync();
     Task<object> CheckoutItemAsync(CheckoutItemDto request);
     Task<object> BulkCheckoutItemsAsync(List<CheckoutItemDto> request);
+    Task<object> CheckoutBoughtItemsAsync();
 }

@@ -15,7 +15,7 @@ public class ShoppingListRepository : IShoppingListRepository
 
     public async Task<List<ShoppingListItem>> GetAllAsync()
     {
-        return await _context.ShoppingListItems.ToListAsync();
+        return await _context.ShoppingListItems.AsNoTracking().ToListAsync();
     }
 
     public async Task<ShoppingListItem?> GetByIdAsync(int id)
@@ -51,12 +51,17 @@ public class ShoppingListRepository : IShoppingListRepository
 
     public async Task<Item?> GetPantryItemByNameAsync(string name)
     {
-        return await _context.Items.FirstOrDefaultAsync(i => i.Name == name);
+        return await _context.Items.FirstOrDefaultAsync(i => i.Name.Trim().ToLower() == name.Trim().ToLower());
     }
 
     public async Task AddAsync(ShoppingListItem item)
     {
         await _context.ShoppingListItems.AddAsync(item);
+    }
+
+    public async Task AddPantryItemAsync(Item item)
+    {
+        await _context.Items.AddAsync(item);
     }
 
     public void Delete(ShoppingListItem item)
