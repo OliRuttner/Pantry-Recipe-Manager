@@ -7,7 +7,6 @@ namespace Backend.Data
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-        // These become your database tables
         public DbSet<Item> Items { get; set; }
         public DbSet<PerishableItem> PerishableItems { get; set; }
         public DbSet<Recipe> Recipes { get; set; }
@@ -16,9 +15,8 @@ namespace Backend.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // 1. Configure the Many-to-Many junction table
             modelBuilder.Entity<RecipeIngredient>()
-                .HasKey(ri => new { ri.RecipeId, ri.ItemId }); // Composite Key
+                .HasKey(ri => new { ri.RecipeId, ri.ItemId });
 
             modelBuilder.Entity<RecipeIngredient>()
                 .HasOne(ri => ri.Recipe)
@@ -27,11 +25,9 @@ namespace Backend.Data
 
             modelBuilder.Entity<RecipeIngredient>()
                 .HasOne(ri => ri.Item)
-                .WithMany() // Items don't strictly need a list of recipes in your UML
+                .WithMany()
                 .HasForeignKey(ri => ri.ItemId);
 
-            // 2. Configure Inheritance (Table-Per-Hierarchy)
-            // This tells EF that PerishableItems are a type of Item
             modelBuilder.Entity<Item>()
                 .HasDiscriminator<string>("ItemType")
                 .HasValue<Item>("Standard")
