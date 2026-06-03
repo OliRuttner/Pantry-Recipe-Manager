@@ -28,6 +28,27 @@ export default function PantryPage({
 
     const selectedItem = pantry.find((item) => item.id === selectedItemId);
 
+    const generateDemoData = async () => {
+    try {
+        const response = await fetch(
+            "http://localhost:5218/api/DemoData/generate",
+            {
+                method: "POST"
+            }
+        );
+
+        const data = await response.json();
+
+        alert(data.message);
+
+        window.location.reload();
+    }
+    catch (error) {
+        console.error(error);
+        alert("Failed to generate demo data");
+    }
+};
+
     const filteredItems = useMemo(() => {
         return pantry.filter((item) => {
             const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
@@ -57,10 +78,20 @@ export default function PantryPage({
     setModalMode("edit");
 }
 
-    function saveItem(event) {
+    async function saveItem(event) {
     event.preventDefault();
 
-    onSaveItem({
+    const duplicate = pantry.some((item) =>
+        item.name.trim().toLowerCase() === form.name.trim().toLowerCase() &&
+        item.id !== form.id
+    );
+
+    if (duplicate) {
+        alert("This ingredient already exists in the pantry.");
+        return;
+    }
+
+    await onSaveItem({
         ...form,
         quantity: Number(form.quantity),
         lowStockThreshold: Number(form.lowStockThreshold),
@@ -101,10 +132,18 @@ export default function PantryPage({
                         Track products, quantities, units, and expiration dates.
                     </p>
                 </div>
+                                <div style={{display:"flex", gap:"10px"}}>
+                    <button className="primary-button" onClick={openAdd}>
+                        + Add Ingredient
+                    </button>
 
-                <button className="primary-button" onClick={openAdd}>
-                    + Add Ingredient
-                </button>
+                    <button
+                        className="secondary-button"
+                        onClick={generateDemoData}
+                    >
+                        Generate Demo Data
+                    </button>
+                </div>
             </div>
 
             <div className="toolbar">

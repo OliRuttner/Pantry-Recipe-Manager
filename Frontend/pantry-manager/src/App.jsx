@@ -143,10 +143,23 @@ export default function App() {
       setPage("shopping");
     } catch (err) {
       setError(err.message);
+      throw err;
     }
   }
 
-  async function cookRecipe(recipeId, portions) {
+  async function addShoppingItem(item) {
+    setError("");
+
+    try {
+      await api.addShoppingItem(item);
+      await loadShoppingList();
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }
+
+  async function cookRecipe(recipeId, portions, options = {}) {
     const recipe = recipes.find((item) => item.id === recipeId);
     if (!recipe) return;
 
@@ -154,17 +167,23 @@ export default function App() {
 
     if (missing.length > 0) {
       await addMissingToShopping(missing);
-      return;
+      return { success: false, redirectedToShopping: true };
     }
 
     setError("");
 
     try {
-      await api.cookRecipe(recipeId, portions);
+      const result = await api.cookRecipe(recipeId, portions);
       await loadPantry();
-      setPage("pantry");
+
+      if (options.redirect !== false) {
+        setPage("pantry");
+      }
+
+      return result;
     } catch (err) {
       setError(err.message);
+      throw err;
     }
   }
 
@@ -185,6 +204,22 @@ export default function App() {
     try {
       await api.clearBoughtShoppingItems();
       await loadShoppingList();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function checkoutBought() {
+    const boughtItems = shoppingList.filter((item) => item.isBought);
+
+    if (boughtItems.length === 0) return;
+
+    setError("");
+
+    try {
+      await api.checkoutBoughtShoppingItems();
+      await loadAllData();
+      setPage("pantry");
     } catch (err) {
       setError(err.message);
     }
@@ -257,8 +292,9 @@ export default function App() {
         <ShoppingListPage
           shoppingList={shoppingList}
           onToggleBought={toggleBought}
-          onClearBought={clearBought}
+          onCheckoutBought={checkoutBought}
           onClearAll={clearAllShopping}
+          onAddShoppingItem={addShoppingItem}
         />
       )}
     </Layout>
