@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
     getMissingIngredients,
     getRecipeCoverage,
+    getRecipeExpiringIngredients,
+    getRecipeExpiryPriority,
 } from "../utils/pantryLogic.js";
 
 export default function SuggestionsPage({
@@ -13,6 +15,7 @@ export default function SuggestionsPage({
     onAddMissingToShopping,
 }) {
     const [selectedId, setSelectedId] = useState(null);
+    const [cookState, setCookState] = useState("idle");
 
     useEffect(() => {
         if (!selectedId && recipes.length > 0) {
@@ -26,8 +29,21 @@ export default function SuggestionsPage({
                 recipe,
                 coverage: getRecipeCoverage(recipe, pantry),
                 missing: getMissingIngredients(recipe, pantry),
+                expiringIngredients: getRecipeExpiringIngredients(recipe, pantry),
+                expiryPriority: getRecipeExpiryPriority(recipe, pantry),
             }))
-            .sort((a, b) => b.coverage - a.coverage);
+            .sort((a, b) => {
+                const readyDifference =
+                    Number(b.missing.length === 0) - Number(a.missing.length === 0);
+
+                if (readyDifference !== 0) return readyDifference;
+
+                if (b.expiryPriority !== a.expiryPriority) {
+                    return b.expiryPriority - a.expiryPriority;
+                }
+
+                return b.coverage - a.coverage;
+            });
     }, [recipes, pantry]);
 
     const selectedSuggestion =
@@ -41,9 +57,26 @@ export default function SuggestionsPage({
     }
 
     async function handleCook() {
-        if (!selectedSuggestion) return;
+        if (!selectedSuggestion || cookState !== "idle") return;
+        if (selectedSuggestion.missing.length > 0) return;
 
-        await onCookRecipe(selectedSuggestion.recipe.id, 1);
+        setCookState("cooking");
+
+        try {
+            const result = await onCookRecipe(selectedSuggestion.recipe.id, 1, {
+                redirect: false,
+            });
+
+            if (result?.redirectedToShopping) return;
+
+            setCookState("done");
+
+            window.setTimeout(() => {
+                setPage("pantry");
+            }, 950);
+        } catch {
+            setCookState("idle");
+        }
     }
 
     async function handleAddMissing() {
@@ -60,10 +93,10 @@ export default function SuggestionsPage({
     }
 
     return (
-        <section className="page-card">
+        <section className="page-card suggestions-page">
             <div className="section-heading">
                 <div>
-                    <p className="eyebrow">Recommendations</p>
+                    <p className="eyebrow">Recipe Matches</p>
                     <h1>What can you cook today?</h1>
                 </div>
             </div>
@@ -90,16 +123,24 @@ export default function SuggestionsPage({
                                     {Math.round(suggestion.coverage)}% pantry
                                     match
                                 </p>
+                                {suggestion.expiringIngredients.length > 0 && (
+                                    <span className="expiry-priority-note">
+                                        Use soon: {suggestion.expiringIngredients
+                                            .slice(0, 2)
+                                            .map((item) => item.name)
+                                            .join(", ")}
+                                    </span>
+                                )}
                             </div>
 
                             <span
                                 className={`status-pill ${
-                                    suggestion.coverage === 100
+                                    suggestion.missing.length === 0
                                         ? "status-good"
                                         : "status-warning"
                                 }`}
                             >
-                                {suggestion.coverage === 100
+                                {suggestion.missing.length === 0
                                     ? "Ready"
                                     : `${suggestion.missing.length} missing`}
                             </span>
@@ -160,6 +201,33 @@ export default function SuggestionsPage({
                                     }
                                 </strong>
                             </div>
+
+            
+                        </div>
+
+                        <div className="preview-section">
+                            <h3>Expiring Soon Priority</h3>
+
+                            {selectedSuggestion.expiringIngredients.length === 0 ? (
+                                <p className="muted-text">
+                                    No recipe ingredients are expiring in the next 3 days.
+                                </p>
+                            ) : (
+                                <ul className="expiry-list">
+                                    {selectedSuggestion.expiringIngredients.map((item) => (
+                                        <li key={item.name}>
+                                            <strong>{item.name}</strong>
+                                            <span>
+                                                {item.daysLeft === 0
+                                                    ? "expires today"
+                                                    : `expires in ${item.daysLeft} day${
+                                                          item.daysLeft === 1 ? "" : "s"
+                                                      }`}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
 
                         <div className="preview-section">
@@ -184,29 +252,53 @@ export default function SuggestionsPage({
                             )}
                         </div>
 
-                        <div className="modal-actions">
-                            <button
-                                type="button"
-                                className="secondary-button"
-                                onClick={handleAddMissing}
-                                disabled={
-                                    selectedSuggestion.missing.length === 0
-                                }
-                            >
-                                Add Missing to Shopping List
-                            </button>
-
-                            <button
-                                type="button"
-                                className="primary-button"
-                                onClick={handleCook}
-                            >
-                                Cook Recipe
-                            </button>
-                        </div>
+                        <div className="modal-actions suggestions-actions">
+    {selectedSuggestion.missing.length === 0 ? (
+        <button
+            type="button"
+            className={`primary-button cook-button ${
+                cookState !== "idle" ? "is-cooking" : ""
+            }`}
+            onClick={handleCook}
+            disabled={cookState !== "idle"}
+        >
+            {cookState === "idle"
+                ? "Cook Recipe"
+                : cookState === "cooking"
+                    ? "Cooking..."
+                    : "Cooked!"}
+        </button>
+    ) : (
+        <button
+            type="button"
+            className="secondary-button"
+            onClick={handleAddMissing}
+        >
+            Add Missing to Shopping List
+        </button>
+    )}
+</div>
                     </article>
                 )}
             </div>
+
+            {cookState !== "idle" && (
+                <div className="cook-toast" role="status" aria-live="polite">
+                    <div className="cook-pan">✓</div>
+                    <div>
+                        <strong>
+                            {cookState === "cooking"
+                                ? "Cooking your recipe..."
+                                : "Recipe cooked!"}
+                        </strong>
+                        <p>
+                            {cookState === "cooking"
+                                ? "Updating your pantry ingredients."
+                                : "Pantry updated. Redirecting now."}
+                        </p>
+                    </div>
+                </div>
+            )}
         </section>
     );
 }

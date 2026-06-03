@@ -1,6 +1,6 @@
 import { diets } from "../data/constants.js";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "https://localhost:7247/api";
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5218/api";
 
 async function request(path, options = {}) {
     const response = await fetch(`${API_BASE}${path}`, {
@@ -192,6 +192,22 @@ export const api = {
 
     async clearBoughtShoppingItems() {
         await request("/ShoppingList/clear-bought", { method: "DELETE" });
+    },
+
+    async checkoutBoughtShoppingItems() {
+        return request("/ShoppingList/checkout-bought", { method: "POST" });
+    },
+
+    async bulkCheckout(items) {
+        return request("/ShoppingList/bulk-checkout", {
+            method: "POST",
+            body: JSON.stringify(
+                items.map((item) => ({
+                    shoppingListItemId: item.id,
+                    actualQuantityBought: Number(item.quantityNeeded),
+                }))
+            ),
+        });
     },
 
     async deleteShoppingItem(id) {

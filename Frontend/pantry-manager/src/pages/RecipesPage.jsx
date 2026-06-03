@@ -73,8 +73,18 @@ export default function RecipesPage({
     function addIngredient() {
         if (!ingredientForm.name || !ingredientForm.quantity) return;
 
+        const normalizedName = ingredientForm.name.trim().toLowerCase();
+        const alreadyAdded = form.ingredients.some(
+            (ingredient) => ingredient.name.trim().toLowerCase() === normalizedName
+        );
+
+        if (alreadyAdded) {
+            alert("This ingredient is already in the recipe.");
+            return;
+        }
+
         const pantryItem = pantry.find(
-            (item) => item.name.trim().toLowerCase() === ingredientForm.name.trim().toLowerCase()
+            (item) => item.name.trim().toLowerCase() === normalizedName
         );
 
         setForm({
@@ -84,7 +94,7 @@ export default function RecipesPage({
                 {
                     id: pantryItem?.id ?? Date.now(),
                     itemId: pantryItem?.id,
-                    name: ingredientForm.name,
+                    name: ingredientForm.name.trim(),
                     quantity: Number(ingredientForm.quantity),
                     unit: pantryItem?.unit ?? ingredientForm.unit,
                 },
@@ -101,10 +111,20 @@ export default function RecipesPage({
         });
     }
 
-    function saveRecipe(event) {
+    async function saveRecipe(event) {
     event.preventDefault();
 
-    onSaveRecipe({
+    const duplicate = recipes.some((recipe) =>
+        recipe.name.trim().toLowerCase() === form.name.trim().toLowerCase() &&
+        recipe.id !== form.id
+    );
+
+    if (duplicate) {
+        alert("This recipe already exists.");
+        return;
+    }
+
+    await onSaveRecipe({
         ...form,
         caloriesPerPortion: Number(form.caloriesPerPortion),
         basePortions: Number(form.basePortions),
@@ -154,7 +174,7 @@ export default function RecipesPage({
                 />
 
                 <div className="filter-checks">
-                    {diets.map((diet) => (
+                    {diets.filter((diet) => diet !== "None").map((diet) => (
                         <label key={diet}>
                             <input
                                 type="checkbox"
